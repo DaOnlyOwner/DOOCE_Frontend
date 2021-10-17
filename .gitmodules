@@ -1,0 +1,3 @@
+[submodule "extern/DOOCE"]
+	path = extern/DOOCE
+	url = https://github.com/DaOnlyOwner/DOOCE.git
