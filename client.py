@@ -12,7 +12,6 @@ piece_offsets_y = {dc.PieceType.bishop:6,dc.PieceType.knight:6,dc.PieceType.pawn
 
 class BoardGUI:
     def __init__(self,as_black, gameplay):
-        pg.init()
         self.as_black = as_black
         self.game = gameplay.get_game()
         self.gameplay = gameplay
@@ -20,7 +19,6 @@ class BoardGUI:
         self.clock = pg.time.Clock()
         self.square_size = SIZE / 8
         self.from_=None
-        #self.pos_clicked = None
         self.delta = (0,0)
         self.lastMP = (0,0)
         self.running = True
@@ -86,17 +84,17 @@ class BoardGUI:
         # Detect if let go over another field
         if event.type == pg.MOUSEBUTTONUP and self.from_ != None:
             # Get the index of the field
-            to = -1
+            to = (-1,-1)
             for x in range(8):
                 for y in range(8):
                     r = pg.Rect(x*self.square_size,y*self.square_size,self.square_size,self.square_size)
                     if(r.collidepoint(pg.mouse.get_pos())):
-                        to = y * 8 + x
+                        to = (x,y)
             from_ = self.from_
             self.from_ = None
             self.delta = (0,0)
             return (from_,to)
-        return (-1,-1)
+        return ((-1,-1),(-1,-1))
         
     def update_drag(self,event):
         # Detect if user drags the piece
@@ -113,20 +111,30 @@ class BoardGUI:
         pg.display.flip()
 
     def render_and_update(self):
-        from_,to = -1,-1
+        from_,to = (-1,-1),(-1,-1)
         for e in pg.event.get():
             if e.type == pg.QUIT:
                 self.running = False
             self.update_click(e)
             from_,to = self.update_let_go(e)
             self.update_drag(e)
+        if from_[0] != -1:
+            idx_from = from_[0]+8*from_[1]
+            idx_to = to[0]+8*to[1]
+            from_str = dc.sq_idx_to_str(idx_from)
+            to_str = dc.sq_idx_to_str(idx_to)
+            mv_str = from_str+to_str
+            mv = self.gameplay.get_game().from_dooce_algebraic_notation(mv_str)
+            if mv != None:
+                self.gameplay.incoming_move(mv)
+                self.gameplay.pick_next_move()
+
         self.render()    
 
     def mainloop(self):
         while self.running:
             self.render_and_update()  
-        pg.display.quit()
-        pg.quit()  
+
 
 # https://stackoverflow.com/questions/65649933/display-png-from-string-on-python-pygame
 def load_image(path):
@@ -170,6 +178,13 @@ class GUI:
             self.boardGUI.stop()
             self.boardGUIThread.join()
 
+    def pygame_mainloop(self,gameplay):
+        pg.init()
+        self.boardGUI = BoardGUI(False,gameplay)
+        self.boardGUI.mainloop()
+        pg.display.quit()
+        pg.quit()
+
     def new_game_default(self):
         if self.boardGUI != None:
             self.boardGUI.stop()
@@ -180,16 +195,17 @@ class GUI:
             mtp_str = self.mtp.get()
             tt_size = 0
             mtp = 0
-            if(tt_size_str == "" or mtp_str == ""):
-                print("Using standard values for new game")
+            if tt_size_str == "": 
+                print("Using standard values for transposition table size")
                 tt_size = 1 << 20
+            if mtp_str == "":
+                print("Using standard values for minutes to think")
                 mtp = 5
-            else:
+            if tt_size_str != "" and mtp_str != "":
                 tt_size = int(eval(self.tt_size.get()))
                 mtp = int(self.mtp.get())
             gameplay = dc.make_gameplay_st(dc.Game(),mtp,tt_size)
-            self.boardGUI = BoardGUI(False,gameplay)
-            self.boardGUIThread = th.Thread(target=self.boardGUI.mainloop)
+            self.boardGUIThread = th.Thread(target=self.pygame_mainloop,args=[gameplay])
             self.boardGUIThread.start()
         except Exception as e:
             print(e)
